@@ -1,6 +1,8 @@
 package com.example.notificationapp
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.app.IntentService
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -12,23 +14,25 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.work.*
+import com.example.notificationapp.databinding.ActivityMainBinding
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : AppCompatActivity() {
 
-    val CHANNEL_ID = "channelId"
-    val CHANNEL_NAME = "channelName"
-    val NOTIFICATION_ID = 0
-    lateinit var  button:Button
+    lateinit var  binding: ActivityMainBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
 
         val permissionState =
@@ -41,40 +45,45 @@ class MainActivity : AppCompatActivity() {
                 1
             )
         }
-        createNotificationChannel()
 
-        val intent = Intent(this,MainActivity::class.java)
-        val pendingIntent = TaskStackBuilder.create(this).run {
-            addNextIntentWithParentStack(intent)
-            getPendingIntent(0,PendingIntent.FLAG_MUTABLE)
+        binding.button.setOnClickListener{
+            oneTimeWork()
+        }
+        binding.button2.setOnClickListener{
+            periodicTimeWork()
         }
 
-        val notification = NotificationCompat.Builder(this,CHANNEL_ID)
-            .setContentTitle("Notification Test")
-            .setContentText("This is text of notification")
-            .setSmallIcon(R.drawable.ic_baseline_notifications_24)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .build()
-
-        val notificationManager = NotificationManagerCompat.from(this)
-
-        button = findViewById(R.id.button)
-        button.setOnClickListener {
-            notificationManager.notify(NOTIFICATION_ID,notification)
-        }
     }
 
-    fun createNotificationChannel(){
-        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
-            val channel = NotificationChannel(CHANNEL_ID,CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT).apply {
-                lightColor = Color.GREEN
-                enableLights(true)
-            }
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel);
-        }
+    private fun oneTimeWork(){
+        Toast.makeText(applicationContext,"Notification One Time Work",Toast.LENGTH_SHORT).show()
+        val constraints= Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
+            .setRequiresCharging(true)
+            .build()
+
+        val workRequest:WorkRequest = OneTimeWorkRequest.Builder(MyWorker::class.java)
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(this).enqueue(workRequest)
+    }
+
+
+    @SuppressLint("InvalidPeriodicWorkRequestInterval")
+    fun periodicTimeWork(){
+        Toast.makeText(applicationContext,"Notification Periodic Time Work",Toast.LENGTH_SHORT).show()
+        val constraints= Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
+            .setRequiresCharging(true)
+            .build()
+
+        val workRequest = PeriodicWorkRequestBuilder<MyWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.LINEAR, PeriodicWorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
+            .build()
+
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork("PeriodicWorkManager",ExistingPeriodicWorkPolicy.REPLACE,workRequest)
 
     }
 }
